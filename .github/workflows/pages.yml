@@ -54,6 +54,19 @@ jobs:
                   print("fixed", p)
               else:
                   print("ok", p)
+
+          # remove decorative skeleton avatar circle in header
+          for p in Path(".").rglob("*.html"):
+              if "node_modules" in p.parts:
+                  continue
+              t = p.read_text(encoding="utf-8")
+              nt = t.replace(
+                  '<div class="h-9 w-9 animate-pulse rounded-full bg-[var(--color-bg-subtle)]" aria-hidden="true"></div>',
+                  '',
+              )
+              if nt != t:
+                  p.write_text(nt, encoding="utf-8")
+                  print("removed skeleton", p)
           PY
 
       - uses: actions/configure-pages@v5

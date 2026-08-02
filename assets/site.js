@@ -228,8 +228,19 @@
     });
   }
 
+  function removeSkeletonCircles(root) {
+    (root || document)
+      .querySelectorAll(
+        'div.h-9.w-9.animate-pulse.rounded-full, div.animate-pulse.rounded-full[aria-hidden="true"]'
+      )
+      .forEach(function (el) {
+        if (el && !el.children.length && !el.textContent.trim()) el.remove();
+      });
+  }
+
   function boot() {
     rewriteAbsoluteLinks(document);
+    removeSkeletonCircles(document);
     wireMobileMenu();
     wireDropdowns();
   }
