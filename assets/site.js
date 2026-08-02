@@ -1,102 +1,75 @@
-/* CH Crépy-en-Valois — client helpers for static deploy (GitHub Pages + Vercel) */
+/* CH Crépy — fix absolute routes on GitHub project Pages (must work without full HTML redeploy) */
 (function () {
-  function isProjectPages() {
-    // GitHub project site: /ch-crepy-site/ or /ch-crepy-site/index.html
-    return /\/ch-crepy-site(\/|$)/.test(location.pathname);
+  var BASE = "/ch-crepy-site/";
+  function onPages() {
+    try { return /\/ch-crepy-site(\/|$)/.test(location.pathname); } catch (e) { return false; }
   }
-
-  /** Convert absolute app routes (/smr, /) to relative *.html for project Pages base path. */
-  function toRelativeHtml(href) {
-    if (!href || href.startsWith('http') || href.startsWith('//') || href.startsWith('tel:') || href.startsWith('mailto:') || href.startsWith('#') || href.startsWith('?')) {
-      return null;
+  function toRel(href) {
+    if (!href || href.charAt(0) !== "/" || href.indexOf("//") === 0) return null;
+    if (/^(https?:|tel:|mailto:|#|\?)/i.test(href)) return null;
+    var u = href.slice(1);
+    if (!u) return "index.html";
+    var hash = "", q = "", path = u;
+    var hi = u.indexOf("#");
+    var qi = u.indexOf("?");
+    if (hi >= 0) { path = u.slice(0, hi); hash = u.slice(hi); }
+    else if (qi >= 0) { path = u.slice(0, qi); q = u.slice(qi); }
+    path = path.replace(/\/$/, "");
+    if (!path) return "index.html" + hash + q;
+    if (path.indexOf("images/") === 0 || path.indexOf("assets/") === 0 || path.indexOf("fragments/") === 0) return path + hash + q;
+    if (path.slice(-5) === ".html") return path + hash + q;
+    return path + ".html" + hash + q;
+  }
+  function fix(root) {
+    if (!onPages()) return;
+    var nodes = (root || document).querySelectorAll("a[href^='/']");
+    for (var i = 0; i < nodes.length; i++) {
+      var a = nodes[i];
+      var h = a.getAttribute("href");
+      var n = toRel(h);
+      if (n) a.setAttribute("href", n);
     }
-    if (!href.startsWith('/')) return null;
-    // Keep protocol-relative and external-looking out
-    const u = href.slice(1); // drop leading /
-    if (!u) return 'index.html';
-    const hashIdx = u.indexOf('#');
-    const qIdx = u.indexOf('?');
-    let path = u;
-    let suffix = '';
-    if (hashIdx >= 0) {
-      path = u.slice(0, hashIdx);
-      suffix = u.slice(hashIdx);
-    } else if (qIdx >= 0) {
-      path = u.slice(0, qIdx);
-      suffix = u.slice(qIdx);
-    }
-    path = path.replace(/\/$/, '');
-    if (!path) return 'index.html' + suffix;
-    if (path.endsWith('.html')) return path + suffix;
-    // /images/... or assets should stay under project if needed — only rewrite page routes
-    if (path.startsWith('images/') || path.startsWith('assets/') || path.startsWith('fragments/')) {
-      return path + suffix;
-    }
-    return path + '.html' + suffix;
   }
-
-  function rewriteAbsoluteLinks(root) {
-    if (!isProjectPages()) return;
-    (root || document).querySelectorAll('a[href^="/"]').forEach(function (a) {
-      const h = a.getAttribute('href');
-      const next = toRelativeHtml(h);
-      if (next) a.setAttribute('href', next);
-    });
-  }
-
-  function wireUi() {
-    document.querySelectorAll('button[aria-expanded]').forEach(function (b) {
-      if (b.dataset.bound === '1') return;
-      b.dataset.bound = '1';
-      b.addEventListener('click', function () {
-        const exp = b.getAttribute('aria-expanded') === 'true';
-        b.setAttribute('aria-expanded', exp ? 'false' : 'true');
-        const id = b.getAttribute('aria-controls');
-        if (id) {
-          const el = document.getElementById(id);
-          if (el) {
-            el.hidden = exp;
-            el.style.display = exp ? 'none' : '';
-          }
-        }
-        const menu = b.parentElement && b.parentElement.querySelector('[role="menu"]');
-        if (menu && !id) {
-          menu.hidden = exp;
-          menu.style.display = exp ? 'none' : '';
-        }
-      });
-    });
-
-    document.querySelectorAll('button[aria-controls="mobile-nav"],button[aria-label*="menu" i],button[aria-label*="Menu"]').forEach(function (btn) {
-      if (btn.dataset.boundNav === '1') return;
-      btn.dataset.boundNav = '1';
-      btn.addEventListener('click', function () {
-        const nav = document.getElementById('mobile-nav');
-        if (!nav) return;
-        const open = nav.getAttribute('data-open') === '1' || (!nav.hidden && nav.style.display !== 'none' && nav.offsetParent !== null);
-        if (open) {
-          nav.setAttribute('data-open', '0');
-          nav.hidden = true;
-          nav.style.display = 'none';
-          btn.setAttribute('aria-expanded', 'false');
-        } else {
-          nav.setAttribute('data-open', '1');
-          nav.hidden = false;
-          nav.style.display = 'block';
-          btn.setAttribute('aria-expanded', 'true');
-        }
-      });
-    });
-  }
-
-  function boot() {
-    rewriteAbsoluteLinks(document);
-    wireUi();
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
+  // Run ASAP
+  fix(document);
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function () { fix(document); wire(); });
   } else {
-    boot();
+    wire();
+  }
+  // Catch late-injected nodes
+  try {
+    new MutationObserver(function () { fix(document); }).observe(document.documentElement, { childList: true, subtree: true });
+  } catch (e) {}
+
+  function wire() {
+    document.querySelectorAll("button[aria-expanded]").forEach(function (b) {
+      if (b.getAttribute("data-bound") === "1") return;
+      b.setAttribute("data-bound", "1");
+      b.addEventListener("click", function () {
+        var exp = b.getAttribute("aria-expanded") === "true";
+        b.setAttribute("aria-expanded", exp ? "false" : "true");
+        var id = b.getAttribute("aria-controls");
+        if (id) {
+          var el = document.getElementById(id);
+          if (el) { el.hidden = exp; el.style.display = exp ? "none" : ""; }
+        }
+        var menu = b.parentElement && b.parentElement.querySelector('[role="menu"]');
+        if (menu && !id) { menu.hidden = exp; menu.style.display = exp ? "none" : ""; }
+      });
+    });
+    document.querySelectorAll('button[aria-controls="mobile-nav"],button[aria-label*="menu" i]').forEach(function (btn) {
+      if (btn.getAttribute("data-bound-nav") === "1") return;
+      btn.setAttribute("data-bound-nav", "1");
+      btn.addEventListener("click", function () {
+        var nav = document.getElementById("mobile-nav");
+        if (!nav) return;
+        var open = nav.getAttribute("data-open") === "1";
+        nav.setAttribute("data-open", open ? "0" : "1");
+        nav.hidden = open;
+        nav.style.display = open ? "none" : "block";
+        btn.setAttribute("aria-expanded", open ? "false" : "true");
+      });
+    });
   }
 })();
